@@ -8,7 +8,7 @@ function M.load_template()
   local type = vim.fn.expand('%:t:r:e')
   local ext = vim.fn.expand('%:e')
 
-  local dir = vim.env.HOME .. '/.config/nvim/templates'
+  local dir = vim.fs.joinpath(vim.fn.stdpath('config'), 'templates')
 
   local tpls = {
     ('%s/%s'):format(dir, name),
@@ -18,7 +18,7 @@ function M.load_template()
 
   for _, tpl in ipairs(tpls) do
     if vim.fn.filereadable(tpl) ~= 0 then
-      vim.cmd('0read ' .. tpl)
+      vim.cmd.read({ args = { tpl }, range = { 0 } })
 
       -- replace: {{ dirname }}
       vim.cmd('silent s/{{%s*dirname%s*}}/' .. vim.fn.expand('%:p:h:t') .. '/ge')
