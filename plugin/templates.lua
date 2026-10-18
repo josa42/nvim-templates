@@ -1,5 +1,9 @@
 local M = {}
 
+local function trim(str)
+  return vim.trim(tostring(str))
+end
+
 function M.load_template()
   if not vim.bo.modifiable then
     return
@@ -18,28 +22,31 @@ function M.load_template()
 
   for _, tpl in ipairs(tpls) do
     if vim.fn.filereadable(tpl) ~= 0 then
-      vim.cmd.read({ args = { tpl }, range = { 0 } })
+      local content = table.concat(vim.fn.readfile(tpl), '\n')
 
       -- replace: {{ dirname }}
-      vim.cmd('silent s/{{%s*dirname%s*}}/' .. vim.fn.expand('%:p:h:t') .. '/ge')
-
-      local content = vim.fn.join(vim.fn.getline(1, '$'), '\n')
+      content = content:gsub('{{%s*dirname%s*}}', function()
+        return vim.fn.expand('%:p:h:t')
+      end)
 
       -- replace: {{ expand: %:r }}
-      for k, pattern in content:gmatch('({{%s*expand:([^}]+)%s*}})') do
-        vim.cmd(('silent s#%s#%s#ge'):format(k, vim.fn.expand(pattern)))
-      end
+      content = content:gsub('{{%s*expand:([^}]+)}}', function(pattern)
+        return vim.fn.expand(trim(pattern))
+      end)
 
       -- replace: {{ lua:vim.fn.system('date') }}
-      for k, code in content:gmatch('({{%s*lua:([^}]*)%s*}})') do
-        local fn = loadstring('return ' .. code)
+      content = content:gsub('({{%s*lua:([^}]*)}})', function(k, code)
+        local fn = load('return ' .. code)
         if fn ~= nil then
           local ok, replace = pcall(fn)
-          if ok then
-            pcall(vim.cmd, ('silent %%s#%s#%s#ge'):format(k, vim.fn.trim(replace)))
+          if ok and replace ~= nil then
+            return trim(replace)
           end
         end
-      end
+        return k
+      end)
+
+      vim.api.nvim_buf_set_lines(0, 0, -1, false, vim.split(content, '\n', { plain = true }))
 
       break
     end
@@ -47,6 +54,7 @@ function M.load_template()
 end
 
 vim.api.nvim_create_autocmd({ 'BufNewFile' }, {
+  group = vim.api.nvim_create_augroup('templates', { clear = true }),
   callback = function()
     M.load_template()
   end,
